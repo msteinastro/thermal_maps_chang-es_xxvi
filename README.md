@@ -1,3 +1,3 @@
 # 2022_thermal_maps
-final version will with the accepted publication!
+final version will be pusbslished with the accepted publication!
 
