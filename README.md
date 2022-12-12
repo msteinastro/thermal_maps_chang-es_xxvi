@@ -10,7 +10,7 @@ DOI: 10.1051/0004-6361/202243906
 If you find the code useful for your own project, please cite the paper and link to this github repository.
 
 final version will be pusbslished with the accepted publication.
-
+### Files:
 The code ist structered in multiple files:
 
 - aux_functions.py: small functions to edit arrays and handle files or datatypes.
@@ -19,6 +19,7 @@ The code ist structered in multiple files:
 - main.py: The main routine to create thermal maps and subtract the from radio maps.
 - math_physics.py: Conversion for the required physical units as well as the star formation (SFR) and thermal emission estimates from Murphy+2011.
 
+### Preparing a homogenization kernel:
 The WISE band 4 (22micron) PSF is far from beeing gaussian. Therefore, to convolve to a common gaussian beam we use pypher (https://pypher.readthedocs.io/en/latest/) to create an homogenization kernel. 
 The folder kernels contains the WISE band 4 PSF (empirical PSF created by stacking stars, thanks to T. Jarrett for providing the PSF), a 15'' and 20'' gaussian PSF as well as the homogenization kernels to go from the WISE band 4 PSF to 15'' or 20'' gaussian kernels. 
 
