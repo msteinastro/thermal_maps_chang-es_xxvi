@@ -16,7 +16,7 @@ The code ist structered in multiple files:
 - aux_functions.py: small functions to edit arrays and handle files or datatypes.
 - calibration.py: calibration functions to calibrate the halpha (to [erg/s/cm/cm/pix]) and the WISE band 4 data ([Jy/pix]). This is only valid for data that comes from the internal CHANG-ES Server. **Make sure that this calibration is valid for your data!**
 - convolution.py: Everything connected to convolving data.
-- main.py: The main routine to create thermal maps and subtract the from radio maps.
+- thermal_maps.py: The main routine to create thermal maps and subtract the from radio maps.
 - math_physics.py: Conversion for the required physical units as well as the star formation (SFR) and thermal emission estimates from Murphy+2011.
 
 ### Preparing a homogenization kernel:
@@ -45,3 +45,5 @@ When calling the `make_thermal` function, you need to specify some extra paramet
 - Common resolution of the radio maps (needed for convolving the H-alpha data)
 
 You can also turn several features on and off to enabable or disable several features. Just have a look at the implementaion of `make_thermal` in main.py
+
+There is an example that should run when executing `thermal_maps.py`
