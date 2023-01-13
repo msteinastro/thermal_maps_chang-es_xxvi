@@ -47,3 +47,5 @@ When calling the `make_thermal` function, you need to specify some extra paramet
 You can also turn several features on and off to enabable or disable several features. Just have a look at the implementaion of `make_thermal` in main.py
 
 There is an example that should run when executing `thermal_maps.py`
+
+In the branch as_published, you can find barebone code that has been used, in the original publication. In the main branch, the code as been restructured for better usability.
