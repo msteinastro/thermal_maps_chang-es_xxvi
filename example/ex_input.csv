@@ -1,2 +1,2 @@
-galaxy,distance[Mpc],coord,size[arcmin],halpha_flux_cal,wise_path,halpha_path,changes_path,lofar_path,mask_path
-NGC4013,16,11h58m31.38s+43d56m47.7s,4.7,2.50E-19,example/ngc4013.w4.ss.fits,example/N4013_stars_Ha_editCV_trans.fits,example/NGC4013_changes_final.fits,example/NGC4013_lofar_final_scaled.fits,example/n4013_flux_elliptical_low.reg
+galaxy,distance[Mpc],coord,size[arcmin],halpha_flux_cal,wise_path,halpha_path,mask_path,radio_maps,radio_maps_ident,list_therm,list_therm_ident
+NGC4013,16,11h58m31.38s+43d56m47.7s,4.7,2.50E-19,example/ngc4013.w4.ss.fits,example/N4013_stars_Ha_editCV_trans.fits,example/n4013_flux_elliptical_low.reg,"[example/NGC4013_changes_final.fits,example/NGC4013_lofar_final_scaled.fits]","[chang-es_lband,lofar_lotss]","[1.5,0.144]","[lband,lotss]"
