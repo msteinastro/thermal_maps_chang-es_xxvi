@@ -33,31 +33,32 @@ import make_plots
 
 # Used constants:
 temp_dir = 'tmp/'
-out_dir = 'example/output/'
-plot_dir = 'example/output/plots/'
+out_dir = 'output/'
+plot_dir = 'output/plots/'
 WISE_comment = 'Data convolved to 20 arcsec Gauss PSF using a Pypher Kernel'
 # IR weighting for Halpha correction:
-a_old = 0.031
 a_new = 0.042
 nu_wise4 = wavelength_to_freq(22e-6)  # 22 micron data (w4 band)
 nu_24mu = wavelength_to_freq(24e-6)
 nuGHzC = 5.99  # freq of C band in GHz
 nuGHzL = 1.5   # L band
 nuMHzLoTTS = 144  # MHz
-# Extinction correction from Vargas 2018:
-extinction_factor = 1.36
+
 
 def make_thermal(setup_file, do_clip=False, nsig_alpha=3, nsig_wise=3,
                  do_mask=True, do_cal=True, do_convolution=True, do_regrid_halpha=True,
-                 do_regird_to_changes=True, reduce_size=False, target_res=15, extinction_correction=True,
+                 do_regird_to_changes=True, do_regrid_to_main=True, reduce_size=False, target_res=15,
                  write_interim_files=False, write_non_thermal=True,
                  show_plots=False, halpha_in_erg_s=False, with_lofar=False, run_tag=None,
                  out_dir=out_dir, plot_dir= plot_dir,
                  Pypher_kernel='/home/michael/PycharmProjects/thermal_maps/outs/w4cut_to_15arcsec.fits',
                  WISE_compare='/data/phd_data/aux_maps/WISE-WERGA/skysubtracted/22micron/ngc2683.w4.ss.fits'):
+    for folder in [temp_dir, out_dir, plot_dir]:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
     if run_tag is not None:
-        out_dir = out_dir + '/' + run_tag
-        plot_dir = plot_dir + '/' + run_tag
+        out_dir = out_dir + run_tag
+        plot_dir = plot_dir + run_tag
         print(f"New out_dir: {out_dir}")
         print(f"New plot_dir: {plot_dir}")
         if not os.path.exists(out_dir):
@@ -83,45 +84,37 @@ def make_thermal(setup_file, do_clip=False, nsig_alpha=3, nsig_wise=3,
         halpha = row['halpha_path']
         wise = row['wise_path']
         halpha_flux_fac = row['halpha_flux_cal']
-        changes = row['changes_path']
         mask = row['mask_path']
-        if with_lofar:
-            lofar = row['lofar_path']
+        radio_maps = row['radio_maps'].strip("[]").split(",")
+        radio_maps_ident = row['radio_maps_ident'].strip("[]").split(",")
+        therm_freq = row['list_therm'].strip("[]").split(",")
+        therm_freq_ident = row['list_therm_ident'].strip("[]").split(",")
+        # Prior Checks:
+        n_radio = len(radio_maps)
+        n_radio_ident = len(radio_maps_ident)
+        if n_radio < 1:
+            raise ValueError('You need to pass at least one radio map')
+        if n_radio != len(radio_maps_ident):
+            raise ValueError(f'You need to pass as many radio maps ({n_radio} passed) as radio map identifiers ({n_radio_ident} passed)')
+        n_therm = len(therm_freq)
+        if n_therm < 1:
+            raise ValueError('You must specify at least one frequency for which a thermal emission map is to be calculated.')
+        if n_therm != len(therm_freq_ident):
+            raise ValueError('You need to pass as many frequencies to compute thermal maps as thermal frequency identifiers')
         # Load fits files
         halpha_dat, halpha_head = load_fits(fits_path=halpha, fix_wcs=True)
         w_halpha = WCS(halpha_head)
         wise_dat, wise_head = load_fits(fits_path=wise, fix_wcs=True)
         w_wise = WCS(wise_head)
-        changes_dat, changes_head = load_fits(fits_path=changes)
-        changes_filename = changes.split('/')[-1]
-        changes_filename_clean = changes_filename.split('.')[0]
-        if with_lofar:
-            print('Load LOFAR data:')
-            lofar_dat, lofar_head = load_fits(fits_path=lofar)
-            lofar_filename = lofar.split('/')[-1]
-            lofar_filename_clean = lofar_filename.split('.')[0]
-            print('Regrid LOFAR data to CHANG-ES frame')
-            # Jy/Beam map: do not conserve sum of pixel values!
-            lofar_regrid_dat, lofar_regrid_head = regrid(data=lofar_dat, header=lofar_head, target_header=changes_head,
-                                                         keep_old_header=True, flux_conserve=False)
-            if write_interim_files:
-                fits.writeto(filename=out_dir + '/' +galaxy + '_lofar_regrid.fits',
-                             data=lofar_regrid_dat, header=lofar_regrid_head, output_verify='fix', overwrite=True)
+        print(f'Load the main radio map: {radio_maps[0]}')
+        main_radio_dat, main_radio_head = load_fits(fits_path=radio_maps[0])
+        main_radio_filename = radio_maps[0].split('/')[-1]
+        main_radio_filename_clean = main_radio_filename.split('.')[0]
+        
         print('Loaded  all data')
         print('Max Halpha', np.nanmax(halpha_dat))
         print('Max WISE', np.nanmax(wise_dat))
-        # Cut off two extra wcs axes and remove unnecessary keys
-        """
-        changes_dat = np.squeeze(changes_dat)
-        print('Changes map shape after squeezing:', changes_dat.shape)
-        changes_head = edit_changes_header(changes_head)
-        w_changes = WCS(changes_head)
-        changes_head.update(w_changes.to_header())
-        fits.writeto(filename=temp_dir+'/changes_2d.fits',
-                     data=changes_dat, header=changes_head, output_verify='fix', overwrite=True)
-        print('Header after updating wcs')
-        print(repr(changes_head))
-        """
+       
         # Compute distance sphere to convert from surface brightness to luminosities
         d_cm = parsec_to_cm(distance * 1e6)
         luminosity_sphere = 4 * np.pi * d_cm ** 2
@@ -144,9 +137,6 @@ def make_thermal(setup_file, do_clip=False, nsig_alpha=3, nsig_wise=3,
             # Flux calibration
             # IR (WISE -> 24mu)
             wise_dat_cal = wise_band4_cal(data=wise_dat, star_forming=True)
-            if extinction_correction:
-                print('Perform extinction correction, with factor: ', extinction_factor)
-                wise_dat_cal = wise_dat_cal * extinction_factor
             # Convert to 24mu using empirical relation 24mu = 1.03*22mu (Wiegert et. al.)
             ir_24mu_jy = wise_dat_cal * 1.03
             #  Convert 24mu data from Jy to erg/s/cm^2
@@ -164,9 +154,9 @@ def make_thermal(setup_file, do_clip=False, nsig_alpha=3, nsig_wise=3,
         if write_interim_files:
             ir_24_mu_erg_s_cm_cm_filled = masked_array_to_filled_nan(ir_24_mu_erg_s_cm_cm)
             halpha_dat_filled = masked_array_to_filled_nan(halpha_dat)
-            fits.writeto(filename=temp_dir + '/ir24mu_after_cal.fits', data=ir_24_mu_erg_s_cm_cm_filled,
+            fits.writeto(filename=out_dir + '/ir24mu_after_cal.fits', data=ir_24_mu_erg_s_cm_cm_filled,
                          overwrite=True)
-            fits.writeto(filename=temp_dir + '/halpha_after_cal.fits', data=halpha_dat_filled, overwrite=True)
+            fits.writeto(filename=out_dir + '/halpha_after_cal.fits', data=halpha_dat_filled, overwrite=True)
         # Fill masked arrays with nan's for astropy convolution
         halpha_dat = masked_array_to_filled_nan(halpha_dat)
         ir_24_mu_erg_s_cm_cm = masked_array_to_filled_nan(ir_24_mu_erg_s_cm_cm)
@@ -180,9 +170,9 @@ def make_thermal(setup_file, do_clip=False, nsig_alpha=3, nsig_wise=3,
             if write_interim_files:
                 ir_24_mu_erg_s_cm_cm_filled = masked_array_to_filled_nan(ir_24_mu_erg_s_cm_cm)
                 halpha_dat_filled = masked_array_to_filled_nan(halpha_dat)
-                fits.writeto(filename=temp_dir + '/ir24mu_after_conv.fits', data=ir_24_mu_erg_s_cm_cm_filled,
+                fits.writeto(filename=out_dir + '/ir24mu_after_conv.fits', data=ir_24_mu_erg_s_cm_cm_filled,
                              overwrite=True)
-                fits.writeto(filename=temp_dir + '/halpha_after_conv.fits', data=halpha_dat_filled, overwrite=True)
+                fits.writeto(filename=out_dir + '/halpha_after_conv.fits', data=halpha_dat_filled, overwrite=True)
 
         #  Regrid H alpha data to WISE frame
         if do_regrid_halpha:
@@ -215,8 +205,8 @@ def make_thermal(setup_file, do_clip=False, nsig_alpha=3, nsig_wise=3,
         if write_interim_files:
             ir_24_mu_erg_s_filled = masked_array_to_filled_nan(ir_24_mu_erg_s)
             halpha_erg_s_filled = masked_array_to_filled_nan(halpha_erg_s)
-            fits.writeto(filename=temp_dir+'/ir24mu_erg_s.fits', data=ir_24_mu_erg_s_filled, overwrite=True)
-            fits.writeto(filename=temp_dir+'/halpha_erg_s.fits', data=halpha_erg_s_filled, overwrite=True)
+            fits.writeto(filename=out_dir+'/ir24mu_erg_s.fits', data=ir_24_mu_erg_s_filled, overwrite=True)
+            fits.writeto(filename=out_dir+'/halpha_erg_s.fits', data=halpha_erg_s_filled, overwrite=True)
 
         print('Brightest Pixel H alpha', np.nanmax(halpha_erg_s))
         halpha_corr_mix = halpha_erg_s+(a_new*ir_24_mu_erg_s)
@@ -224,101 +214,57 @@ def make_thermal(setup_file, do_clip=False, nsig_alpha=3, nsig_wise=3,
         print('Max Halpha_corr', np.nanmax(halpha_corr_mix))
         if write_interim_files:
             correction_diff = (halpha_corr_mix - halpha_erg_s)/halpha_corr_mix
-            fits.writeto(filename=temp_dir+'/rel_halpha_corr_halpha_diff.fits', data=correction_diff, overwrite=True)
+            fits.writeto(filename=out_dir+'/rel_halpha_corr_halpha_diff.fits', data=correction_diff, overwrite=True)
         sfr_map = sfr_murphy_2011(halpha_corr_mix)
         sfr_head = wise_head.copy()
         sfr_head['BUNIT'] = 'M_sol/year'
         fits.writeto(filename=out_dir+'/'+galaxy+'sfr_map.fits',
                      data=sfr_map, header=sfr_head,overwrite=True)
-        l_thermal_lband = thermal_murphy_2011(t_electron=1e4, freq_ghz=nuGHzL, sfr=sfr_map)
-        l_thermal_cband = thermal_murphy_2011(t_electron=1e4, freq_ghz=nuGHzC, sfr=sfr_map)
-        l_thermal_lotss = thermal_murphy_2011(t_electron=1e4, freq_ghz=nuMHzLoTTS*1e3, sfr=sfr_map)
-        thermal_lband_jy = erg_s_cm_cm_hz_to_jy(l_thermal_lband, distance_sphere=luminosity_sphere)
-        thermal_cband_jy = erg_s_cm_cm_hz_to_jy(l_thermal_cband, distance_sphere=luminosity_sphere)
-        thermal_lotss_jy = erg_s_cm_cm_hz_to_jy(l_thermal_lotss, distance_sphere=luminosity_sphere)
-        halpha_head_regrid['BUNIT'] = 'Jy'
-        date = datetime.now().strftime('%m/%d/%y')
-        halpha_head_regrid['COMMENT'] = 'File written on ' + date + ' by M. Stein (AIRUB)'
-
-        if write_interim_files:
-            fits.writeto(filename=out_dir+'/thermal_maps/'+galaxy+'_thermal_Lband.fits',
-                         data=thermal_lband_jy, header=halpha_head_regrid, overwrite=True, output_verify='silentfix')
-            fits.writeto(filename=out_dir + '/thermal_maps/' + galaxy + '_thermal_Cband.fits',
-                         data=thermal_cband_jy, header=halpha_head_regrid, overwrite=True, output_verify='silentfix')
-            fits.writeto(filename=out_dir + '/thermal_maps/' + galaxy + '_thermal_LoTSS.fits',
-                         data=thermal_lotss_jy, header=halpha_head_regrid, overwrite=True, output_verify='silentfix')
-        if do_regird_to_changes:
-            print('Reproject thermal maps to CHANG-ES map')
-            thermal_lband_jy_repr, head_lband = regrid(data=thermal_lband_jy, header=halpha_head_regrid,
-                                                   target_header=changes_head, keep_old_header=True)
-            thermal_cband_jy_repr, head_cband = regrid(data=thermal_cband_jy, header=halpha_head_regrid,
-                                                   target_header=changes_head, keep_old_header=True)
-            thermal_lotss_jy_repr, head_lotss = regrid(data=thermal_lotss_jy, header=halpha_head_regrid,
-                                                   target_header=changes_head, keep_old_header=True)
+        for index, freq in enumerate(therm_freq):
+            freq = float(freq)
+            print(f"Creating a thermal map for the frequency: {freq} GHz.")
+            therm_map = thermal_murphy_2011(t_electron=1e4, freq_ghz=freq, sfr=sfr_map)
+            therm_map_jy = erg_s_cm_cm_hz_to_jy(therm_map, distance_sphere=luminosity_sphere)
+            therm_head_jy = halpha_head_regrid.copy()
+            date = datetime.now().strftime('%m/%d/%y')
+            therm_head_jy['BUNIT'] = 'Jy'
+            therm_head_jy['COMMENT'] = 'File written on ' + date + ' by M. Stein (AIRUB)'
+            therm_head_jy['COMMENT'] = 'Thermal Emission computed for ' + str(therm_freq_ident[index]) + 'GHz.'
             if write_interim_files:
-                print(str('Write thermal maps to ' + out_dir + '/thermal_maps/'))
-                fits.writeto(filename=out_dir+'/thermal_maps/'+galaxy+'_thermal_Lband_repr.fits',
-                             data=thermal_lband_jy_repr, header=changes_head, overwrite=True,
-                             output_verify='fix')
-                fits.writeto(filename=out_dir + '/thermal_maps/' + galaxy + '_thermal_Cband_repr.fits',
-                             data=thermal_cband_jy_repr, header=changes_head, overwrite=True,
-                             output_verify='fix')
-                fits.writeto(filename=out_dir + '/thermal_maps/' + galaxy + '_thermal_LoTSS_repr.fits',
-                             data=thermal_lotss_jy_repr, header=changes_head, overwrite=True,
-                             output_verify='fix')
-        print('Convert Changes Data to Jy/pix')
-        changes_dat_jy, changes_head_jy = jy_beam_to_jy(data=changes_dat, header=changes_head)
-        fits.writeto(filename=out_dir + '/converted_radio/' + changes_filename_clean + '_jy_pix.fits',
-                     data=changes_dat_jy, header=changes_head_jy, overwrite=True)
-        thermal_frac_lband = thermal_lband_jy_repr / changes_dat_jy
-        clipped_mean = sigma_clipped_stats(thermal_frac_lband)[0]
-        print('Average thermal fraction Lband:', clipped_mean)
-        figure_string = 'Clipped mean thermal fraction: ' + "{:.1f}".format(100 * clipped_mean) + '%'
-        make_plots.wcs_plot(data=thermal_frac_lband, head_wcs=WCS(changes_head_jy),
-                            name=galaxy + '_thermal_frac_lband',
-                            min_val=0, max_val=min(0.5, np.nanmax(thermal_lband_jy_repr / changes_dat_jy)), cmap='plasma',
-                            do_cut=True, sky_coord=SkyCoord(coord), size=size * u.arcmin,
-                            with_text=True, text=figure_string, plot_dir=plot_dir)
-        if write_non_thermal:
-            print(str('Write Non Thermal Changes map to ' + out_dir + '/thermal_maps/'))
-            #Non Thermal map for the lband
-            thermal_lband_jy_repr_filled = np.nan_to_num(thermal_lband_jy_repr)
-            changes_non_thermal = changes_dat_jy - thermal_lband_jy_repr_filled
-            fits.writeto(filename=out_dir + '/thermal_maps/' + changes_filename_clean + '_non_thermal_jy_pix.fits',
-                         data=changes_non_thermal, header=changes_head_jy, overwrite=True)
-            changes_nt_jybeam_dat, changes_nt_jybeam_head = jy_to_jy_beam(data=changes_non_thermal ,header=changes_head_jy)
-            fits.writeto(filename=out_dir + '/thermal_maps/' + changes_filename_clean + '_non_thermal_jy_beam.fits',
-                         data=changes_nt_jybeam_dat, header=changes_nt_jybeam_head, overwrite=True)
-        if with_lofar:
-            print('Convert LOFAR Data to Jy/pix')
-            lofar_dat_jy, lofar_head_jy = jy_beam_to_jy(data=lofar_regrid_dat, header=lofar_regrid_head)
-            fits.writeto(filename=out_dir + '/converted_radio/' + lofar_filename_clean + '_jy_pix.fits',
-                         data=lofar_dat_jy, header=lofar_head_jy, overwrite=True)
-            thermal_frac_lotss = thermal_lotss_jy_repr / lofar_dat_jy
-            clipped_mean = sigma_clipped_stats(thermal_frac_lotss)[0]
-            print('Average thermal fraction LoTSS:', clipped_mean)
-            figure_string = 'Clipped mean thermal fraction: ' + "{:.1f}".format(100* clipped_mean)+ '%'
-            make_plots.wcs_plot(data=thermal_frac_lotss, head_wcs=WCS(changes_head_jy),
-                                name=galaxy + '_thermal_frac_lotss',
-                                min_val=0, max_val=min(0.1, np.nanmax(thermal_lotss_jy_repr / lofar_dat_jy)), cmap='plasma',
-                                do_cut=True, sky_coord=SkyCoord(coord), size=size * u.arcmin,
-                                with_text=True, text=figure_string, plot_dir=plot_dir)
-            if write_non_thermal:
-                print(str('Write Non Thermal LOFAR map to ' + out_dir + '/thermal_maps/'))
-                # Non Thermal map for the lofar
-                thermal_lotss_jy_repr_filled = np.nan_to_num(thermal_lotss_jy_repr)
-                lofar_non_thermal = lofar_dat_jy - thermal_lotss_jy_repr_filled
-                fits.writeto(filename=out_dir + '/thermal_maps/' + lofar_filename_clean + '_non_thermal_jy_pix.fits',
-                             data=lofar_non_thermal, header=lofar_head_jy, overwrite=True)
-                lofar_nt_jybeam_dat, lofar_nt_jybeam_head = jy_to_jy_beam(data=lofar_non_thermal,
-                                                                              header=lofar_head_jy)
-                fits.writeto(filename=out_dir + '/thermal_maps/' + lofar_filename_clean + '_non_thermal_jy_beam.fits',
-                             data=lofar_nt_jybeam_dat, header=lofar_nt_jybeam_head, overwrite=True)
+                fits.writeto(filename=out_dir+'/thermal_maps/'+galaxy+'_thermal_' + therm_freq_ident[index] + '.fits',
+                         data=therm_map_jy, header=therm_head_jy, overwrite=True, output_verify='silentfix')
+            if do_regrid_to_main:
+                print('Reproject thermal map to the main radio map')
+                thermal_jy_repr, head_thermal_jy_repr = regrid(data=therm_map_jy, header=halpha_head_regrid,
+                                                   target_header=main_radio_head, keep_old_header=True)
+                fits.writeto(filename=out_dir+'/thermal_maps/'+galaxy+'_thermal_regrid_'+ therm_freq_ident[index] + '.fits',
+                            data=thermal_jy_repr, header=head_thermal_jy_repr, overwrite=True, output_verify='silentfix')
+        # Regrid the radio data to the main radio map, if multiple radio maps were given:
+        if n_radio > 1:
+            # Skip first map as it is the main map.
+            for index, radio_map in enumerate(radio_maps[1:], start=1):
+                print(f'Load file: {radio_map}')
+                radio_dat, radio_head = load_fits(fits_path=radio_map)
+                radio_filename = radio_map.split('/')[-1]
+                radio_filename_clean = radio_filename.split('.')[0]
+                print('Regrid additional map to  the main radio frame')
+                # Jy/Beam map: do not conserve sum of pixel values!
+                radio_regrid_dat, radio_regrid_head = regrid(data=radio_dat, header=radio_head, target_header=main_radio_head,
+                                                            keep_old_header=True, flux_conserve=False)
+                fits.writeto(filename=out_dir + '/converted_radio/' +galaxy + '_' + radio_maps_ident[index] + '_regrid.fits',
+                    data=radio_regrid_dat, header=radio_regrid_head, output_verify='silentfix', overwrite=True) 
+
         print('----------------- Done with this Galaxy')
     return 0
 
 if __name__ == '__main__':
+
     print(os.getcwd())
+    make_thermal('n3044/n3044_input.csv',
+                write_interim_files=True,with_lofar=True,target_res=20,
+                Pypher_kernel='kernels/W4_to_20arcsec_gauss.fits',
+                WISE_compare='example/ngc4013.w4.ss.fits',
+                run_tag='n3044', plot_dir=plot_dir)
     make_thermal('example/ex_input.csv',
                 write_interim_files=True,with_lofar=True,target_res=20,
                 Pypher_kernel='kernels/W4_to_20arcsec_gauss.fits',
