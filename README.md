@@ -9,7 +9,6 @@ DOI: 10.1051/0004-6361/202243906
 
 If you find the code useful for your own project, please cite the paper and link to this github repository.
 
-final version will be pusbslished with the accepted publication.
 ### Files:
 The code ist structered in multiple files:
 
