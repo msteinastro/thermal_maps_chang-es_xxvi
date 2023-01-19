@@ -39,7 +39,9 @@ The code is designed to be executed on several galaxies in one run. Galaxy speci
 - radio_maps: List of paths to the radio maps. First entry will is the main radio map that is used as WCS reference frame for all other maps.
 - radio_maps_ident: List of radio map identifiers that are used when writing our new files.
 - list_therm: List of radio frequencies [GHz] that you want you compute thermal emission maps for.
-- list_therm_ident: List of thermal emission map identifiers that are used when writing our new files
+- list_therm_ident: List of thermal emission map identifiers that are used when writing our new files.
+
+
 When calling the `make_thermal` function, you need to specify some extra parameters that are not galaxy specific:
 - Path to the setup file.
 - Common resolution of the radio maps (needed for convolving the H-alpha data)
