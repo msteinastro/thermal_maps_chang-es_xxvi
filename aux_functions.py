@@ -59,7 +59,7 @@ def read_setup_file(setup_path):
     """
     Reads the setup and parses all required arguments to the following functions
     """
-    df_params = pd.read_csv(setup_path, header=0)
+    df_params = pd.read_csv(setup_path, header=0, quotechar='"')
     print('Loaded Parameter File:')
     print(df_params)
     return df_params

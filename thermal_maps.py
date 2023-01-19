@@ -260,11 +260,11 @@ def make_thermal(setup_file, do_clip=False, nsig_alpha=3, nsig_wise=3,
 if __name__ == '__main__':
 
     print(os.getcwd())
-    make_thermal('n3044/n3044_input.csv',
-                write_interim_files=True,with_lofar=True,target_res=20,
-                Pypher_kernel='kernels/W4_to_20arcsec_gauss.fits',
-                WISE_compare='example/ngc4013.w4.ss.fits',
-                run_tag='n3044', plot_dir=plot_dir)
+    # make_thermal('n3044/n3044_input.csv',
+    #             write_interim_files=True,with_lofar=True,target_res=20,
+    #             Pypher_kernel='kernels/W4_to_20arcsec_gauss.fits',
+    #             WISE_compare='example/ngc4013.w4.ss.fits',
+    #             run_tag='n3044', plot_dir=plot_dir)
     make_thermal('example/ex_input.csv',
                 write_interim_files=True,with_lofar=True,target_res=20,
                 Pypher_kernel='kernels/W4_to_20arcsec_gauss.fits',
